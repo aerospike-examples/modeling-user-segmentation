@@ -204,6 +204,28 @@ try:
     print(b["u"])
     print(spacer)
 
+    # Clear all the segments that expire before today from the user u1
+    print("Clean the stale segments for user u1")
+    if options.interactive:
+        pause()
+    ops = [
+        mh.map_remove_by_value_range(
+            "u",
+            [0, aerospike.null()],
+            [end_ttl, aerospike.null()],
+            aerospike.MAP_RETURN_COUNT,
+            False,
+        ),
+        mh.map_size("u"),
+    ]
+    _, _, b = client.operate_ordered(key, ops)
+    stale_segments, segments_left = b
+    print(
+        "User u1 had {} stale segments trimmed, with {} segments remaining".format(
+            stale_segments[1], segments_left[1]
+        )
+    )
+    print(spacer)
 except Exception as e:
     print("Error: {0} [{1}]".format(e.msg, e.code))
 client.close()

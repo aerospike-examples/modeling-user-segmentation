@@ -133,12 +133,16 @@ try:
             aerospike.MAP_RETURN_KEY,
             False,
         ),
-        mh.map_size("u")
+        mh.map_size("u"),
     ]
     _, _, b = client.operate_ordered(key, ops)
     stale_segments, total_segments = b
     print("This user has a total of {} segments".format(total_segments[1]))
-    print("Of those, a total of {} segments should be cleaned".format(len(stale_segments[1])))
+    print(
+        "Of those, a total of {} segments should be cleaned".format(
+            len(stale_segments[1])
+        )
+    )
     print("Show all segments with a segment TTL before the current hour:")
     print(stale_segments)
     print(spacer)
@@ -157,7 +161,7 @@ try:
             False,
         )
     ]
-    #_, _, _ = client.operate_ordered(key, ops)
+    # _, _, _ = client.operate_ordered(key, ops)
     scan = client.scan(namespace, set)
     scan.add_ops(ops)
     job_id = scan.execute_background()
@@ -176,12 +180,16 @@ try:
             aerospike.MAP_RETURN_KEY,
             False,
         ),
-        mh.map_size("u")
+        mh.map_size("u"),
     ]
     _, _, b = client.operate_ordered(key, ops)
     stale_segments, total_segments = b
     print("This user now has a total of {} segments".format(total_segments[1]))
-    print("Of those, a total of {} segments should be cleaned".format(len(stale_segments[1])))
+    print(
+        "Of those, a total of {} segments should be cleaned".format(
+            len(stale_segments[1])
+        )
+    )
     print("Show all segments with a segment TTL before the current hour:")
     print(stale_segments)
     print(spacer)
