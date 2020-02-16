@@ -1,6 +1,6 @@
 # Modeling User Segmentation in Aerospike
 
-This is companion code for my Medium article on the [Aerospike Developer Blog](https://medium.com/aerospike-developer-blog).
+This is companion code for my Medium article [Aerospike Modeling: User Profile Store](https://medium.com/@rbotzer/aerospike-modeling-user-profile-store-dc3c1464b60a)
 
 
 ## Populate Test Data
