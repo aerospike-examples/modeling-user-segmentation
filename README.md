@@ -1,6 +1,6 @@
-# Modeling IoT Sensors in Aerospike
+# Modeling User Segmentation in Aerospike
 
-This is companion code for a future article
+This is companion code for my Medium article on the [Aerospike Developer Blog](https://medium.com/aerospike-developer-blog).
 
 
 ## Populate Test Data
@@ -13,10 +13,8 @@ chmod +x run_workers.sh
 ## Query the Data
 
 ```
-python update_query_user_profile --help
-python: can't open file 'update_query_user_profile': [Errno 2] No such file or directory
-ArrrBook-Pro:modeling-user-segmentation rbotzer$ python update_query_user_profile.py --help
-usage: update_query_user_profile.py [--help] [-U <USERNAME>] [-P <PASSWORD>]
+python update_query_user_profiles.py --help
+usage: update_query_user_profiles.py [--help] [-U <USERNAME>] [-P <PASSWORD>]
                                     [-h <ADDRESS>] [-p <PORT>] [-n <NS>]
                                     [-s <SET>] [-i]
 

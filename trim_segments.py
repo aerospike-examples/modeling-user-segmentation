@@ -5,15 +5,14 @@ import aerospike
 from aerospike import exception as e
 
 try:
-    from aerospike_helpers.operations import list_operations as lh
     from aerospike_helpers.operations import map_operations as mh
-    from aerospike_helpers import cdt_ctx as ctxh
 except:
     pass  # Needs Aerospike client >= 3.4.0
 import datetime
 import pprint
 import random
 import sys
+import time
 
 argparser = argparse.ArgumentParser(add_help=False)
 argparser.add_argument(
@@ -119,91 +118,72 @@ spacer = "=" * 30
 epoch = datetime.datetime(2019, 1, 1)
 now = datetime.datetime.now()
 try:
-    # Upsert a single segment in the user profile
-    key = (namespace, set, "u1")
-    segment_id = random.randint(0, 81999)
-    ttl_dt = now + datetime.timedelta(days=30)
-    segment_ttl = int((ttl_dt - epoch).total_seconds() / 3600)
-    ops = [
-        mh.map_get_by_key("u", segment_id, aerospike.MAP_RETURN_KEY_VALUE),
-        mh.map_put("u", segment_id, [segment_ttl, {}]),
-        mh.map_get_by_key("u", segment_id, aerospike.MAP_RETURN_KEY_VALUE),
-    ]
-    print("\nUpsert segment {} => [{}] to user u1".format(segment_id, segment_ttl))
+    # Find all segments whose TTL is before this hour
+    key = (namespace, set, "u3")
+    current_hour = int((now - epoch).total_seconds() / 3600)
+    print("\nCurrent hour is {} hours since epoch".format(current_hour))
     if options.interactive:
         pause()
-    _, _, b = client.operate_ordered(key, ops)
-    segment_check, segment_count, new_segment = b
-    print("Segment value before: {}".format(segment_check[1]))
-    print("Number of segments after upsert: {}".format(segment_count[1]))
-    print("Segment value after: {}".format(new_segment[1]))
-    print(spacer)
 
-    # Update multiple segments of a user profile
-    segments = {}
-    ttl_dt = now + datetime.timedelta(days=30)
-    segment_ttl = int((ttl_dt - epoch).total_seconds() / 3600)
-    for i in range(8):
-        segment_id = random.randint(0, 81999)
-        segments[segment_id] = [segment_ttl, {}]
-    print("\nUpdating multiple segments for user u1")
-    pp.pprint(segments)
-    if options.interactive:
-        pause()
-    ops = [
-        mh.map_put_items("u", segments),
-        mh.map_get_by_value(
-            "u", [segment_ttl, aerospike.CDTWildcard()], aerospike.MAP_RETURN_KEY_VALUE
-        ),
-    ]
-    _, _, b = client.operate(key, ops)
-    print("Show all segments with TTL {}:".format(segment_ttl))
-    print(b["u"])
-    print(spacer)
-
-    # Update a segment's TTL by 5 extra hours
-    # First, the context for the list increment (path to the TTL)
-    ctx = [ctxh.cdt_ctx_map_key(segment_id)]
-    ops = [
-        lh.list_increment("u", 0, 5, ctx=ctx),
-        mh.map_get_by_key("u", segment_id, aerospike.MAP_RETURN_KEY_VALUE),
-    ]
-    print("\nAdd 5 hours to the TTL of user u1's segment {}".format(segment_id))
-    if options.interactive:
-        pause()
-    _, _, b = client.operate(key, ops)
-    print(b["u"])
-    print(spacer)
-
-    # Fetch the user's segments that are not going to expire today
-    today = datetime.datetime(now.year, now.month, now.day)
-    end_ttl = int((today - epoch).total_seconds() / 3600)
-    print("\nGet only user segments that are not going to expire today")
-    if options.interactive:
-        pause()
     ops = [
         mh.map_get_by_value_range(
             "u",
             [0, aerospike.null()],
-            [end_ttl, aerospike.null()],
+            [current_hour - 1, aerospike.null()],
             aerospike.MAP_RETURN_KEY,
-            True,
-        )
+            False,
+        ),
+        mh.map_size("u")
     ]
-    _, _, b = client.operate(key, ops)
-    print("Show all segments not expiring today:".format(segment_ttl))
-    print(b["u"])
+    _, _, b = client.operate_ordered(key, ops)
+    stale_segments, total_segments = b
+    print("This user has a total of {} segments".format(total_segments[1]))
+    print("Of those, a total of {} segments should be cleaned".format(len(stale_segments[1])))
+    print("Show all segments with a segment TTL before the current hour:")
+    print(stale_segments)
     print(spacer)
 
-    # Count all the segments in the segment ID range 8000-9000
-    today = datetime.datetime(now.year, now.month, now.day)
-    end_ttl = int((today - epoch).total_seconds() / 3600)
-    print("\nCount how many segments u1 has in the segment ID range 8000-9000")
+    # Clean up the stale segments using a background scan with a transaction
+    # attached to it
+    print("Clean the stale segments from the entire namespace")
     if options.interactive:
         pause()
-    ops = [mh.map_get_by_key_range("u", 8000, 9000, aerospike.MAP_RETURN_COUNT)]
-    _, _, b = client.operate(key, ops)
-    print(b["u"])
+    ops = [
+        mh.map_remove_by_value_range(
+            "u",
+            [0, aerospike.null()],
+            [current_hour - 1, aerospike.null()],
+            aerospike.MAP_RETURN_NONE,
+            False,
+        )
+    ]
+    #_, _, _ = client.operate_ordered(key, ops)
+    scan = client.scan(namespace, set)
+    scan.add_ops(ops)
+    job_id = scan.execute_background()
+    # wait for job to finish
+    while True:
+        response = client.job_info(job_id, aerospike.JOB_SCAN)
+        if response["status"] != aerospike.JOB_STATUS_INPROGRESS:
+            break
+        time.sleep(0.25)
+
+    ops = [
+        mh.map_get_by_value_range(
+            "u",
+            [0, aerospike.null()],
+            [current_hour - 1, aerospike.null()],
+            aerospike.MAP_RETURN_KEY,
+            False,
+        ),
+        mh.map_size("u")
+    ]
+    _, _, b = client.operate_ordered(key, ops)
+    stale_segments, total_segments = b
+    print("This user now has a total of {} segments".format(total_segments[1]))
+    print("Of those, a total of {} segments should be cleaned".format(len(stale_segments[1])))
+    print("Show all segments with a segment TTL before the current hour:")
+    print(stale_segments)
     print(spacer)
 
 except Exception as e:
